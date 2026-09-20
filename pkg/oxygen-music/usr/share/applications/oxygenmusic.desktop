@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=OxygenMusic
+GenericName=Music Player
+Comment=A high-performance Linux music player featuring iOS 27 Liquid Glass aesthetics and spatial visualizers
+Exec=oxygenmusic
+Icon=oxygenmusic
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Player;Music;
