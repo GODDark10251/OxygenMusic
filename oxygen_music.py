@@ -35,7 +35,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QSlider, QListWidget, QListWidgetItem,
     QLineEdit, QFileDialog, QSplitter, QMessageBox, QFrame,
-    QStackedWidget, QAbstractButton, QSystemTrayIcon, QMenu, QInputDialog, QDialog, QGridLayout
+    QStackedWidget, QAbstractButton, QSystemTrayIcon, QMenu, QInputDialog, QDialog
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
@@ -71,103 +71,40 @@ def init_db():
 init_db()
 
 # -------------------------------------------------------------------------
-# FULL MPRIS V2 D-BUS ADAPTOR
+# EXACT iOS 27 SPATIAL GLASS PAINTER & SPECULAR TEXTURES
 # -------------------------------------------------------------------------
-if HAS_DBUS:
-    class MprisRootAdaptor(QDBusAbstractAdaptor):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.setAutoRelaySignals(True)
-            self.win = parent
-
-        @pyqtSlot(result=bool)
-        def CanQuit(self):
-            return True
-
-        @pyqtSlot(result=bool)
-        def CanRaise(self):
-            return True
-
-        @pyqtSlot(result=str)
-        def Identity(self):
-            return "OxygenMusic"
-
-        @pyqtSlot()
-        def Quit(self):
-            QApplication.instance().quit()
-
-        @pyqtSlot()
-        def Raise(self):
-            self.win.showNormal()
-            self.win.activateWindow()
-
-    class MprisPlayerAdaptor(QDBusAbstractAdaptor):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.setAutoRelaySignals(True)
-            self.win = parent
-
-        @pyqtSlot(result=str)
-        def PlaybackStatus(self):
-            if self.win.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-                return "Playing"
-            elif self.win.player.playbackState() == QMediaPlayer.PlaybackState.PausedState:
-                return "Paused"
-            return "Stopped"
-
-        @pyqtSlot(result=dict)
-        def Metadata(self):
-            return {
-                "mpris:trackid": "/org/oxygenmusic/current_track",
-                "xesam:title": self.win.current_title,
-                "xesam:artist": ["OxygenMusic"],
-                "xesam:album": "iOS 27 Spatial Library"
-            }
-
-        @pyqtSlot()
-        def PlayPause(self):
-            self.win.toggle_playback()
-
-        @pyqtSlot()
-        def Play(self):
-            if self.win.player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
-                self.win.toggle_playback()
-
-        @pyqtSlot()
-        def Pause(self):
-            if self.win.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-                self.win.toggle_playback()
-
-        @pyqtSlot()
-        def Next(self):
-            self.win.play_next()
-
-        @pyqtSlot()
-        def Previous(self):
-            self.win.play_previous()
-
-# -------------------------------------------------------------------------
-# IOS 27 SPATIAL GLASS PAINTER UTILITIES
-# -------------------------------------------------------------------------
-def draw_ios27_glass(painter: QPainter, rect: QRectF, radius: float = 22.0, hover_progress: float = 0.0):
+def draw_ios27_glass(painter: QPainter, rect: QRectF, radius: float = 24.0, hover_progress: float = 0.0):
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     
+    # Deep multi-stop frosted substrate gradient
     grad_bg = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-    r_boost = int(hover_progress * 15)
-    grad_bg.setColorAt(0.0, QColor(24 + r_boost, 28, 42 + r_boost, 160))
-    grad_bg.setColorAt(1.0, QColor(10, 13, 20, 215))
+    r_boost = int(hover_progress * 18)
+    grad_bg.setColorAt(0.0, QColor(26 + r_boost, 32, 48 + r_boost, 185))
+    grad_bg.setColorAt(0.5, QColor(16, 20, 30, 210))
+    grad_bg.setColorAt(1.0, QColor(8, 11, 18, 235))
+    
     painter.setBrush(QBrush(grad_bg))
     painter.setPen(Qt.PenStyle.NoPen)
     painter.drawRoundedRect(rect, radius, radius)
 
-    border_alpha = int(40 + hover_progress * 35)
-    grad_border = QLinearGradient(rect.topLeft(), rect.bottomRight())
-    grad_border.setColorAt(0.0, QColor(255, 255, 255, border_alpha + 40))
-    grad_border.setColorAt(0.5, QColor(255, 255, 255, border_alpha))
-    grad_border.setColorAt(1.0, QColor(255, 255, 255, 10))
+    # iOS 27 Specular Top Highlight Rim (Simulating light refraction)
+    specular_rect = QRectF(rect.x() + 1, rect.y() + 1, rect.width() - 2, rect.height() * 0.45)
+    spec_grad = QLinearGradient(specular_rect.topLeft(), specular_rect.bottomLeft())
+    spec_grad.setColorAt(0.0, QColor(255, 255, 255, int(45 + hover_progress * 25)))
+    spec_grad.setColorAt(1.0, QColor(255, 255, 255, 2))
     
-    painter.setPen(QPen(QBrush(grad_border), 1.2))
+    painter.setBrush(QBrush(spec_grad))
+    painter.drawRoundedRect(specular_rect, radius, radius)
+
+    # Precision outer refraction border
+    border_alpha = int(55 + hover_progress * 40)
+    grad_border = QLinearGradient(rect.topLeft(), rect.bottomRight())
+    grad_border.setColorAt(0.0, QColor(255, 255, 255, border_alpha + 50))
+    grad_border.setColorAt(0.5, QColor(255, 255, 255, border_alpha))
+    grad_border.setColorAt(1.0, QColor(255, 255, 255, 15))
+    
+    painter.setPen(QPen(QBrush(grad_border), 1.25))
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRoundedRect(rect.adjusted(0.6, 0.6, -0.6, -0.6), radius, radius)
     painter.restore()
@@ -291,7 +228,6 @@ class DownloadWorker(QThread):
 
     def run(self):
         import yt_dlp
-        
         if getattr(sys, 'frozen', False):
             base_dir = os.path.dirname(sys.executable)
         else:
@@ -328,34 +264,31 @@ class EqualizerDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Audio Equalizer & Preamp")
-        self.resize(360, 280)
+        self.resize(380, 300)
         self.setStyleSheet("""
-            QDialog { background-color: #080a10; color: #f0f4ff; font-family: 'sans-serif'; }
+            QDialog { background-color: #06080d; color: #f0f4ff; font-family: 'sans-serif'; }
             QLabel { color: #b8c7ff; font-size: 9pt; font-weight: bold; }
-            QSlider::groove:vertical { width: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; }
+            QSlider::groove:vertical { width: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; }
             QSlider::sub-page:vertical { background: #5865f2; border-radius: 3px; }
-            QSlider::add-page:vertical { background: rgba(255,255,255,0.05); border-radius: 3px; }
-            QSlider::handle:vertical { background: #ffffff; height: 14px; margin: 0 -4px; border-radius: 7px; }
+            QSlider::add-page:vertical { background: rgba(255,255,255,0.03); border-radius: 3px; }
+            QSlider::handle:vertical { background: #ffffff; height: 16px; margin: 0 -5px; border-radius: 8px; }
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(15)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(18)
 
         bands = ["Preamp", "60 Hz", "250 Hz", "1 kHz", "4 kHz", "16 kHz"]
-        self.sliders = []
-
         for band in bands:
             col = QVBoxLayout()
             col.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            col.setSpacing(8)
+            col.setSpacing(10)
 
             lbl_val = QLabel("0 dB")
             slider = QSlider(Qt.Orientation.Vertical)
             slider.setRange(-12, 12)
             slider.setValue(0)
             slider.setFixedWidth(28)
-
             lbl_name = QLabel(band)
 
             slider.valueChanged.connect(lambda val, l=lbl_val: l.setText(f"{val:+d} dB"))
@@ -364,10 +297,9 @@ class EqualizerDialog(QDialog):
             col.addWidget(slider, 1, Qt.AlignmentFlag.AlignCenter)
             col.addWidget(lbl_name)
             layout.addLayout(col)
-            self.sliders.append(slider)
 
 # -------------------------------------------------------------------------
-# PURE VISUALIZER STAGE
+# PURE VISUALIZER STAGE (120Hz Spring Physics & Specular Aura)
 # -------------------------------------------------------------------------
 class PureVisualizerStage(QWidget):
     def __init__(self, parent=None):
@@ -381,7 +313,7 @@ class PureVisualizerStage(QWidget):
 
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self.physics_tick)
-        self.anim_timer.start(8)
+        self.anim_timer.start(8) # ~120 FPS high-smoothness tick
 
     def set_spectrum(self, spectrum):
         self.spectrum_data = spectrum
@@ -406,15 +338,15 @@ class PureVisualizerStage(QWidget):
             self.target_heights = np.maximum(self.target_heights * 0.88, 0.02)
 
     def physics_tick(self):
-        self.spatial_phase += 0.02
-        self.smooth_targets += (self.target_heights - self.smooth_targets) * 0.18
+        self.spatial_phase += 0.018
+        self.smooth_targets += (self.target_heights - self.smooth_targets) * 0.22
         for i in range(self.num_bars):
             target = self.smooth_targets[i]
             curr = self.current_heights[i]
             if target > curr:
-                self.current_heights[i] += (target - curr) * 0.26
+                self.current_heights[i] += (target - curr) * 0.32  # Crisp iOS spring attack
             else:
-                self.current_heights[i] -= (curr - target) * 0.085
+                self.current_heights[i] -= (curr - target) * 0.095 # Silk decay release
         self.update()
 
     def paintEvent(self, event):
@@ -422,25 +354,26 @@ class PureVisualizerStage(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
 
-        painter.fillRect(self.rect(), QColor("#040508"))
+        painter.fillRect(self.rect(), QColor("#030406"))
 
+        # Dynamic Ambient Aura Glow
         avg_energy = float(np.mean(self.current_heights))
-        aura_alpha = int(50 + avg_energy * 120)
-        aura = QRadialGradient(w * 0.5 + math.sin(self.spatial_phase) * 80, h * 0.5, w * 0.6)
-        aura.setColorAt(0.0, QColor(90, 110, 255, aura_alpha))
-        aura.setColorAt(1.0, QColor(4, 5, 8, 0))
+        aura_alpha = int(60 + avg_energy * 140)
+        aura = QRadialGradient(w * 0.5 + math.sin(self.spatial_phase) * 90, h * 0.45, w * 0.65)
+        aura.setColorAt(0.0, QColor(95, 125, 255, aura_alpha))
+        aura.setColorAt(1.0, QColor(3, 4, 6, 0))
         painter.fillRect(self.rect(), aura)
 
         glass_margin = 16.0
         stage_rect = QRectF(glass_margin, glass_margin, w - glass_margin * 2, h - glass_margin * 2)
-        draw_ios27_glass(painter, stage_rect, radius=24.0, hover_progress=0.0)
+        draw_ios27_glass(painter, stage_rect, radius=26.0, hover_progress=0.0)
 
-        baseline_y = h - glass_margin - 36
-        inner_w = w - (glass_margin * 2) - 36
-        start_x = glass_margin + 18
-        spacing = 2.6
+        baseline_y = h - glass_margin - 40
+        inner_w = w - (glass_margin * 2) - 40
+        start_x = glass_margin + 20
+        spacing = 2.4
         bar_w = max(2.0, (inner_w - ((self.num_bars - 1) * spacing)) / float(self.num_bars))
-        max_vis_height = h * 0.65
+        max_vis_height = h * 0.62
 
         for i in range(self.num_bars):
             val = float(self.current_heights[i])
@@ -449,22 +382,22 @@ class PureVisualizerStage(QWidget):
             y_up = baseline_y - up_h
 
             grad_up = QLinearGradient(x, baseline_y, x, y_up)
-            grad_up.setColorAt(0.0, QColor(70, 100, 210, 180))
-            grad_up.setColorAt(0.65, QColor(130, 175, 255, 230))
+            grad_up.setColorAt(0.0, QColor(80, 115, 235, 190))
+            grad_up.setColorAt(0.6, QColor(140, 190, 255, 240))
             grad_up.setColorAt(1.0, QColor(255, 255, 255, 255))
 
             painter.setBrush(QBrush(grad_up))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(QRectF(x, y_up, bar_w, up_h), 3.5, 3.5)
+            painter.drawRoundedRect(QRectF(x, y_up, bar_w, up_h), 4.0, 4.0)
 
 # -------------------------------------------------------------------------
-# PROGRESS BAR & CONTROLS
+# FLUID PROGRESS BAR & CONTROLS
 # -------------------------------------------------------------------------
 class Fluid120HzProgressBar(QWidget):
     position_seek = pyqtSignal(int)
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(20)
+        self.setFixedHeight(22)
         self.setMouseTracking(True)
         self.duration_ms, self.target_pos_ms, self.render_pos_ms = 1, 0.0, 0.0
         self.is_hovered, self.is_dragging = False, False
@@ -483,25 +416,26 @@ class Fluid120HzProgressBar(QWidget):
     def frame_tick(self):
         if not self.is_dragging:
             diff = self.target_pos_ms - self.render_pos_ms
-            self.render_pos_ms += diff * (0.15 if abs(diff) > 0.5 else 1.0)
+            self.render_pos_ms += diff * (0.18 if abs(diff) > 0.5 else 1.0)
         self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
-        track_h = 5.0 if not self.is_hovered and not self.is_dragging else 7.5
+        track_h = 5.0 if not self.is_hovered and not self.is_dragging else 8.0
         track_y = (h - track_h) / 2.0
         progress_w = max(0.0, min(1.0, self.render_pos_ms / float(self.duration_ms))) * w
 
-        painter.setBrush(QColor(22, 27, 40, 200))
-        painter.setPen(QPen(QColor(255, 255, 255, 30), 0.9))
+        painter.setBrush(QColor(20, 25, 38, 220))
+        painter.setPen(QPen(QColor(255, 255, 255, 35), 1.0))
         painter.drawRoundedRect(QRectF(0, track_y, w, track_h), track_h / 2.0, track_h / 2.0)
 
         if progress_w > 0:
             grad = QLinearGradient(0, 0, progress_w, 0)
             grad.setColorAt(0.0, QColor("#5865f2"))
-            grad.setColorAt(1.0, QColor("#b8c7ff"))
+            grad.setColorAt(0.7, QColor("#8fa4ff"))
+            grad.setColorAt(1.0, QColor("#ffffff"))
             painter.setBrush(grad)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(QRectF(0, track_y, progress_w, track_h), track_h / 2.0, track_h / 2.0)
@@ -529,7 +463,7 @@ class Fluid120HzProgressBar(QWidget):
 class AnimatedPlayPauseButton(QAbstractButton):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(52, 52)
+        self.setFixedSize(54, 54)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.is_playing, self.morph_ratio, self.hover_scale = False, 0.0, 1.0
         self.timer = QTimer(self)
@@ -540,8 +474,8 @@ class AnimatedPlayPauseButton(QAbstractButton):
         self.is_playing = p
 
     def animate_tick(self):
-        self.morph_ratio += ((1.0 if self.is_playing else 0.0) - self.morph_ratio) * 0.22
-        self.hover_scale += ((1.10 if self.underMouse() else 1.00) - self.hover_scale) * 0.25
+        self.morph_ratio += ((1.0 if self.is_playing else 0.0) - self.morph_ratio) * 0.25
+        self.hover_scale += ((1.12 if self.underMouse() else 1.00) - self.hover_scale) * 0.28
         self.update()
 
     def paintEvent(self, event):
@@ -549,30 +483,30 @@ class AnimatedPlayPauseButton(QAbstractButton):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
         center = QPointF(w / 2.0, h / 2.0)
-        radius = 22.0 * self.hover_scale
+        radius = 23.0 * self.hover_scale
 
         grad = QLinearGradient(0, 0, w, h)
-        grad.setColorAt(0.0, QColor(95, 115, 255, 235))
-        grad.setColorAt(1.0, QColor(55, 68, 200, 245))
+        grad.setColorAt(0.0, QColor(95, 125, 255, 245))
+        grad.setColorAt(1.0, QColor(50, 65, 210, 250))
         painter.setBrush(grad)
-        painter.setPen(QPen(QColor(255, 255, 255, 110), 1.4))
+        painter.setPen(QPen(QColor(255, 255, 255, 130), 1.5))
         painter.drawEllipse(center, radius, radius)
 
         m = self.morph_ratio
         painter.setBrush(QColor("#ffffff"))
         p1_x = center.x() - (7.0 - 2.0 * m)
         p1_w, p1_h = 4.0 + (1.0 * (1.0 - m)), 16.0 - (4.0 * (1.0 - m))
-        painter.drawRoundedRect(QRectF(p1_x, center.y() - p1_h / 2.0, p1_w, p1_h), 1.8, 1.8)
+        painter.drawRoundedRect(QRectF(p1_x, center.y() - p1_h / 2.0, p1_w, p1_h), 2.0, 2.0)
         if m > 0.05:
             painter.setOpacity(float(m))
-            painter.drawRoundedRect(QRectF(center.x() + (3.0 * m), center.y() - p1_h / 2.0, p1_w, p1_h), 1.8, 1.8)
+            painter.drawRoundedRect(QRectF(center.x() + (3.0 * m), center.y() - p1_h / 2.0, p1_w, p1_h), 2.0, 2.0)
             painter.setOpacity(1.0)
         if m < 0.95:
             painter.setOpacity(float(1.0 - m))
             play_tip = QPainterPath()
-            play_tip.moveTo(center.x() - 4.0, center.y() - 8.5)
-            play_tip.lineTo(center.x() + 9.0, center.y())
-            play_tip.lineTo(center.x() - 4.0, center.y() + 8.5)
+            play_tip.moveTo(center.x() - 4.0, center.y() - 9.0)
+            play_tip.lineTo(center.x() + 9.5, center.y())
+            play_tip.lineTo(center.x() - 4.0, center.y() + 9.0)
             painter.drawPath(play_tip)
             painter.setOpacity(1.0)
 
@@ -589,7 +523,7 @@ class AnimatedVolumeIcon(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         cy = self.height() / 2.0
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(200, 220, 255, 240))
+        painter.setBrush(QColor(210, 230, 255, 250))
         spk = QPainterPath()
         spk.moveTo(4, cy - 3)
         spk.lineTo(8, cy - 3)
@@ -600,21 +534,21 @@ class AnimatedVolumeIcon(QWidget):
         painter.drawPath(spk)
 
 class FrostedGlassFrame(QFrame):
-    def __init__(self, radius=20.0, parent=None):
+    def __init__(self, radius=24.0, parent=None):
         super().__init__(parent)
         self.radius = radius
     def paintEvent(self, event):
         draw_ios27_glass(QPainter(self), QRectF(self.rect()), radius=self.radius, hover_progress=0.0)
 
 # -------------------------------------------------------------------------
-# OXYGENMUSIC MAIN WINDOW WITH ALL 3 FEATURES BUILT-IN
+# OXYGENMUSIC MAIN WINDOW
 # -------------------------------------------------------------------------
 class OxygenMusic(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("OxygenMusic")
-        self.resize(1240, 820)
-        self.setMinimumSize(960, 640)
+        self.resize(1260, 840)
+        self.setMinimumSize(980, 660)
 
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
@@ -635,39 +569,39 @@ class OxygenMusic(QMainWindow):
 
     def init_ui(self):
         self.setStyleSheet("""
-            QMainWindow { background-color: #040508; }
-            QWidget#rootCanvas { background-color: #040508; }
+            QMainWindow { background-color: #030406; }
+            QWidget#rootCanvas { background-color: #030406; }
             QWidget { color: #f0f4ff; font-family: 'sans-serif'; }
-            QLineEdit { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 9px 14px; color: #ffffff; }
-            QLineEdit:focus { border: 1px solid rgba(138, 172, 255, 0.7); background: rgba(255, 255, 255, 0.08); }
-            QPushButton { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 8px 16px; font-weight: bold; }
-            QPushButton:hover { background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.3); }
-            QPushButton#primaryBtn { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(88,101,242,0.9), stop:1 rgba(50,60,185,0.98)); color: #fff; border: 1px solid rgba(255, 255, 255, 0.3); }
-            QListWidget { background: rgba(12, 16, 26, 0.6); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 12px; font-size: 10pt; }
-            QListWidget::item { padding: 10px 12px; border-radius: 8px; margin-bottom: 4px; }
-            QListWidget::item:selected { background: rgba(110, 140, 255, 0.28); color: #d6e2ff; border: 1px solid rgba(255, 255, 255, 0.22); }
+            QLineEdit { background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; padding: 10px 15px; color: #ffffff; }
+            QLineEdit:focus { border: 1px solid rgba(138, 172, 255, 0.8); background: rgba(255, 255, 255, 0.09); }
+            QPushButton { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; padding: 9px 18px; font-weight: bold; }
+            QPushButton:hover { background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.35); }
+            QPushButton#primaryBtn { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(88,101,242,0.95), stop:1 rgba(45,55,175,0.99)); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); }
+            QListWidget { background: rgba(10, 14, 22, 0.65); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; font-size: 10pt; }
+            QListWidget::item { padding: 11px 14px; border-radius: 10px; margin-bottom: 5px; }
+            QListWidget::item:selected { background: rgba(110, 140, 255, 0.32); color: #d6e2ff; border: 1px solid rgba(255, 255, 255, 0.25); }
         """)
 
         central = QWidget()
         central.setObjectName("rootCanvas")
         self.setCentralWidget(central)
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(12, 12, 12, 12)
-        root_layout.setSpacing(12)
+        root_layout.setContentsMargins(14, 14, 14, 14)
+        root_layout.setSpacing(14)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        sidebar = FrostedGlassFrame(radius=20.0)
+        sidebar = FrostedGlassFrame(radius=24.0)
         sb_layout = QVBoxLayout(sidebar)
-        sb_layout.setContentsMargins(16, 20, 16, 16)
-        sb_layout.setSpacing(12)
+        sb_layout.setContentsMargins(18, 22, 18, 18)
+        sb_layout.setSpacing(14)
 
         logo = QLabel("OxygenMusic")
-        logo.setStyleSheet("font-size: 18pt; font-weight: 900; color: #8fa4ff; letter-spacing: 0.6px;")
+        logo.setStyleSheet("font-size: 19pt; font-weight: 900; color: #8fa4ff; letter-spacing: 0.8px;")
         sb_layout.addWidget(logo)
 
         lib_title = QLabel("Offline Library")
-        lib_title.setStyleSheet("font-size: 10pt; font-weight: bold; color: rgba(175, 195, 235, 0.65);")
+        lib_title.setStyleSheet("font-size: 10pt; font-weight: bold; color: rgba(175, 195, 235, 0.7);")
         sb_layout.addWidget(lib_title)
 
         self.filter_input = QLineEdit()
@@ -690,13 +624,13 @@ class OxygenMusic(QMainWindow):
         self.btn_eq.clicked.connect(lambda: EqualizerDialog(self).exec())
         sb_layout.addWidget(self.btn_eq)
 
-        sidebar.setMinimumWidth(300)
+        sidebar.setMinimumWidth(320)
         splitter.addWidget(sidebar)
 
         center = QWidget()
         center_layout = QVBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
-        center_layout.setSpacing(12)
+        center_layout.setSpacing(14)
 
         tab_header = QHBoxLayout()
         self.tab_buttons = []
@@ -716,9 +650,9 @@ class OxygenMusic(QMainWindow):
         self.stage = PureVisualizerStage()
         self.stack.addWidget(self.stage)
 
-        search_tab = FrostedGlassFrame(radius=22.0)
+        search_tab = FrostedGlassFrame(radius=24.0)
         st_layout = QVBoxLayout(search_tab)
-        st_layout.setContentsMargins(22, 22, 22, 22)
+        st_layout.setContentsMargins(24, 24, 24, 24)
         search_bar = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search online songs...")
@@ -744,10 +678,10 @@ class OxygenMusic(QMainWindow):
         splitter.setStretchFactor(1, 4)
         root_layout.addWidget(splitter, 1)
 
-        playbar = FrostedGlassFrame(radius=20.0)
+        playbar = FrostedGlassFrame(radius=24.0)
         pb_layout = QVBoxLayout(playbar)
-        pb_layout.setContentsMargins(24, 12, 24, 14)
-        pb_layout.setSpacing(8)
+        pb_layout.setContentsMargins(26, 14, 26, 16)
+        pb_layout.setSpacing(10)
 
         prog_layout = QHBoxLayout()
         self.lbl_time_curr, self.lbl_time_total = QLabel("0:00"), QLabel("0:00")
@@ -759,7 +693,7 @@ class OxygenMusic(QMainWindow):
 
         ctrl_layout = QHBoxLayout()
         self.track_info_label = QLabel("No track loaded")
-        self.track_info_label.setFixedWidth(280)
+        self.track_info_label.setFixedWidth(300)
         ctrl_layout.addWidget(self.track_info_label)
         ctrl_layout.addStretch(1)
 
@@ -775,7 +709,7 @@ class OxygenMusic(QMainWindow):
         self.vol_icon, self.vol_slider = AnimatedVolumeIcon(), QSlider(Qt.Orientation.Horizontal)
         self.vol_slider.setRange(0, 100)
         self.vol_slider.setValue(85)
-        self.vol_slider.setFixedWidth(90)
+        self.vol_slider.setFixedWidth(95)
         self.vol_slider.valueChanged.connect(lambda v: self.audio_output.setVolume(v / 100.0))
         ctrl_layout.addWidget(self.vol_icon)
         ctrl_layout.addWidget(self.vol_slider)
@@ -786,8 +720,8 @@ class OxygenMusic(QMainWindow):
         for i, btn in enumerate(self.tab_buttons):
             btn.setChecked(i == index)
         anim = QPropertyAnimation(self.stack, b"windowOpacity")
-        anim.setDuration(280)
-        anim.setStartValue(0.4)
+        anim.setDuration(300)
+        anim.setStartValue(0.3)
         anim.setEndValue(1.0)
         anim.setEasingCurve(QEasingCurve.Type.OutBack)
         anim.start()
