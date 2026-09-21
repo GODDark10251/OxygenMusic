@@ -291,19 +291,29 @@ class DownloadWorker(QThread):
 
     def run(self):
         import yt_dlp
+        
+        if getattr(sys, 'frozen', False):
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        local_ffmpeg = os.path.join(base_dir, "ffmpeg.exe")
+        ffmpeg_loc = local_ffmpeg if os.path.exists(local_ffmpeg) else None
+
         output_template = str(APP_DIR / "%(title)s.%(ext)s")
         try:
             ydl_opts = {
-                'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
+                'format': 'bestaudio/best',
                 'outtmpl': output_template,
                 'quiet': True,
                 'no_warnings': True,
-                'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'm4a'}],
+                'ffmpeg_location': ffmpeg_loc,
+                'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 filename = ydl.prepare_filename(info)
-                audio_path = os.path.splitext(filename)[0] + ".m4a"
+                audio_path = os.path.splitext(filename)[0] + ".mp3"
                 if not os.path.exists(audio_path):
                     audio_path = filename
                 title = info.get('title', 'Unknown Title')
@@ -614,6 +624,8 @@ class OxygenMusic(QMainWindow):
         self.current_filepath = ""
         self.current_title = "No track loaded"
         self.audio_worker = None
+        self.search_worker = None
+        self.download_worker = None
 
         self.init_ui()
         self.init_tray()
@@ -818,7 +830,6 @@ class OxygenMusic(QMainWindow):
         self.track_list.itemDoubleClicked.connect(lambda item: self.play_track_at_row(self.track_list.row(item)))
 
     def on_media_status_changed(self, status):
-        # Auto-Play Feature: Automatically advance to the next track in queue when finished
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             self.play_next()
 
@@ -860,7 +871,7 @@ class OxygenMusic(QMainWindow):
         if c + 1 < self.track_list.count():
             self.play_track_at_row(c + 1)
         elif self.track_list.count() > 0:
-            self.play_track_at_row(0) # Loop back to start
+            self.play_track_at_row(0)
 
     def play_previous(self):
         c = self.track_list.currentRow()
@@ -872,17 +883,49 @@ class OxygenMusic(QMainWindow):
         if not q:
             return
         self.search_results_list.clear()
+        self.search_status.setText("Searching...")
         self.search_worker = SearchWorker(q)
-        self.search_worker.results_signal.connect(lambda s, res, err: [self.search_results_list.addItem(f"[{r['duration']}] {r['title']}") or self.search_results_list.item(self.search_results_list.count()-1).setData(Qt.ItemDataRole.UserRole, r['url']) for r in res] if s else None)
+        self.search_worker.results_signal.connect(self.handle_search_results)
         self.search_worker.start()
+
+    def handle_search_results(self, success, results, err):
+        if not success:
+            self.search_status.setText(f"Search failed: {err}")
+            return
+        self.search_status.setText(f"Found {len(results)} tracks.")
+        for r in results:
+            item = QListWidgetItem(f"[{r['duration']}] {r['title']}")
+            item.setData(Qt.ItemDataRole.UserRole, r['url'])
+            self.search_results_list.addItem(item)
 
     def download_selected_search_result(self):
         item = self.search_results_list.currentItem()
         if not item:
+            QMessageBox.warning(self, "Selection Error", "Please select a track to download first!")
             return
-        self.download_worker = DownloadWorker(item.data(Qt.ItemDataRole.UserRole))
-        self.download_worker.finished_signal.connect(lambda s, path, title: [sqlite3.connect(DB_PATH).cursor().execute("INSERT OR REPLACE INTO songs (title, filepath) VALUES (?, ?)", (title, path)) and sqlite3.connect(DB_PATH).commit() and self.load_library_from_db() if s else None])
+        url = item.data(Qt.ItemDataRole.UserRole)
+        self.btn_dl_selected.setEnabled(False)
+        self.btn_dl_selected.setText("Downloading...")
+        
+        self.download_worker = DownloadWorker(url)
+        self.download_worker.finished_signal.connect(self.handle_download_finished)
         self.download_worker.start()
+
+    def handle_download_finished(self, success, path_or_err, title):
+        self.btn_dl_selected.setEnabled(True)
+        self.btn_dl_selected.setText("Download Selected Track to Offline Library")
+        if success:
+            try:
+                conn = sqlite3.connect(DB_PATH)
+                conn.cursor().execute("INSERT OR REPLACE INTO songs (title, filepath) VALUES (?, ?)", (title, path_or_err))
+                conn.commit()
+                conn.close()
+                self.load_library_from_db()
+                QMessageBox.information(self, "Success", f"Successfully downloaded and added to library:\n{title}")
+            except Exception as e:
+                QMessageBox.critical(self, "Database Error", f"Failed to save to library: {e}")
+        else:
+            QMessageBox.critical(self, "Download Failed", f"Error:\n{path_or_err}")
 
     def load_library_from_db(self):
         self.track_list.clear()
