@@ -4,7 +4,6 @@ import re
 import glob
 import math
 import signal
-import base64
 import sqlite3
 import subprocess
 import warnings
@@ -22,7 +21,6 @@ warnings.filterwarnings("ignore")
 
 import numpy as np
 from scipy.io import wavfile
-import requests
 
 from PyQt6.QtCore import (
     Qt, QUrl, QTimer, QThread, pyqtSignal, QRectF, QPointF, QPropertyAnimation, QEasingCurve
@@ -35,15 +33,13 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QSlider, QListWidget, QListWidgetItem,
     QLineEdit, QFileDialog, QSplitter, QMessageBox, QFrame,
-    QStackedWidget, QAbstractButton, QSystemTrayIcon, QMenu, QInputDialog, QDialog
+    QStackedWidget, QAbstractButton, QSystemTrayIcon, QMenu, QDialog
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # MPRIS D-Bus Linux Desktop Integration
 try:
-    from PyQt6.QtDBus import (
-        QDBusConnection, QDBusAbstractAdaptor, pyqtSlot, QDBusMessage, QDBusVariant
-    )
+    from PyQt6.QtDBus import QDBusConnection, QDBusAbstractAdaptor, pyqtSlot
     HAS_DBUS = True
 except ImportError:
     HAS_DBUS = False
@@ -71,13 +67,12 @@ def init_db():
 init_db()
 
 # -------------------------------------------------------------------------
-# EXACT iOS 27 SPATIAL GLASS PAINTER & SPECULAR TEXTURES
+# EXACT iOS 27 SPATIAL GLASS PAINTER
 # -------------------------------------------------------------------------
 def draw_ios27_glass(painter: QPainter, rect: QRectF, radius: float = 24.0, hover_progress: float = 0.0):
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     
-    # Deep multi-stop frosted substrate gradient
     grad_bg = QLinearGradient(rect.topLeft(), rect.bottomLeft())
     r_boost = int(hover_progress * 18)
     grad_bg.setColorAt(0.0, QColor(26 + r_boost, 32, 48 + r_boost, 185))
@@ -88,7 +83,6 @@ def draw_ios27_glass(painter: QPainter, rect: QRectF, radius: float = 24.0, hove
     painter.setPen(Qt.PenStyle.NoPen)
     painter.drawRoundedRect(rect, radius, radius)
 
-    # iOS 27 Specular Top Highlight Rim (Simulating light refraction)
     specular_rect = QRectF(rect.x() + 1, rect.y() + 1, rect.width() - 2, rect.height() * 0.45)
     spec_grad = QLinearGradient(specular_rect.topLeft(), specular_rect.bottomLeft())
     spec_grad.setColorAt(0.0, QColor(255, 255, 255, int(45 + hover_progress * 25)))
@@ -97,7 +91,6 @@ def draw_ios27_glass(painter: QPainter, rect: QRectF, radius: float = 24.0, hove
     painter.setBrush(QBrush(spec_grad))
     painter.drawRoundedRect(specular_rect, radius, radius)
 
-    # Precision outer refraction border
     border_alpha = int(55 + hover_progress * 40)
     grad_border = QLinearGradient(rect.topLeft(), rect.bottomRight())
     grad_border.setColorAt(0.0, QColor(255, 255, 255, border_alpha + 50))
@@ -110,84 +103,7 @@ def draw_ios27_glass(painter: QPainter, rect: QRectF, radius: float = 24.0, hove
     painter.restore()
 
 # -------------------------------------------------------------------------
-# AUDIO FFT ANALYSIS
-# -------------------------------------------------------------------------
-class AudioAnalysisWorker(QThread):
-    analysis_ready = pyqtSignal(object)
-
-    def __init__(self, filepath: str, num_bars: int = 96):
-        super().__init__()
-        self.filepath = filepath
-        self.num_bars = num_bars
-        self._is_stopped = False
-        self.proc = None
-
-    def stop(self):
-        self._is_stopped = True
-        if self.proc:
-            try:
-                os.killpg(os.getpgid(self.proc.pid), signal.SIGKILL)
-            except Exception:
-                pass
-
-    def run(self):
-        try:
-            cmd = [
-                'ffmpeg', '-nostats', '-loglevel', 'quiet', '-i', self.filepath,
-                '-t', '900', '-f', 'wav', '-ac', '1', '-ar', '16000', '-'
-            ]
-            self.proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, start_new_session=True
-            )
-            raw_audio, _ = self.proc.communicate()
-
-            if self._is_stopped or not raw_audio or len(raw_audio) < 1000:
-                self.analysis_ready.emit(None)
-                return
-
-            sr, samples = wavfile.read(BytesIO(raw_audio))
-            if samples.dtype != np.float32:
-                samples = samples.astype(np.float32) / (np.max(np.abs(samples)) + 1e-6)
-
-            chunk_size = int(sr * 0.040)
-            total_chunks = len(samples) // chunk_size
-            if total_chunks == 0 or self._is_stopped:
-                self.analysis_ready.emit(None)
-                return
-
-            spectrogram = np.zeros((total_chunks, self.num_bars), dtype=np.float32)
-            freqs = np.fft.rfftfreq(chunk_size, 1.0 / sr)
-            edges = np.logspace(np.log10(30), np.log10(7500), self.num_bars + 1)
-            bin_indices = np.digitize(freqs, edges)
-
-            center = self.num_bars / 2.0
-            weights = np.zeros(self.num_bars, dtype=np.float32)
-            for i in range(self.num_bars):
-                dist = abs(i - center) / center
-                weights[i] = 1.0 + math.cos(dist * math.pi * 0.5) * 1.5
-
-            for i in range(total_chunks):
-                if self._is_stopped:
-                    return
-                segment = samples[i * chunk_size:(i + 1) * chunk_size] * np.hanning(chunk_size)
-                fft_vals = np.abs(np.fft.rfft(segment))
-                for b in range(1, self.num_bars + 1):
-                    mask = (bin_indices == b)
-                    if np.any(mask):
-                        spectrogram[i, b - 1] = np.mean(fft_vals[mask]) * weights[b - 1]
-
-            max_val = np.percentile(spectrogram, 98)
-            if max_val > 0:
-                spectrogram = np.clip(spectrogram / (max_val * 0.65), 0.0, 1.0)
-
-            if not self._is_stopped:
-                self.analysis_ready.emit(spectrogram)
-        except Exception:
-            if not self._is_stopped:
-                self.analysis_ready.emit(None)
-
-# -------------------------------------------------------------------------
-# ONLINE SEARCH & DOWNLOAD WORKERS
+# WORKERS (Search, Download, and New Online Stream Worker)
 # -------------------------------------------------------------------------
 class SearchWorker(QThread):
     results_signal = pyqtSignal(bool, list, str)
@@ -218,6 +134,28 @@ class SearchWorker(QThread):
                 self.results_signal.emit(True, results, "")
         except Exception as e:
             self.results_signal.emit(False, [], str(e))
+
+class StreamWorker(QThread):
+    stream_ready = pyqtSignal(bool, str, str, str)  # success, stream_url, title, error
+
+    def __init__(self, url: str):
+        super().__init__()
+        self.url = url
+
+    def run(self):
+        try:
+            import yt_dlp
+            ydl_opts = {'format': 'bestaudio/best', 'quiet': True, 'no_warnings': True}
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+                stream_url = info.get('url')
+                title = info.get('title', 'Online Stream')
+                if stream_url:
+                    self.stream_ready.emit(True, stream_url, title, "")
+                else:
+                    self.stream_ready.emit(False, "", "", "Could not extract direct stream URL.")
+        except Exception as e:
+            self.stream_ready.emit(False, "", "", str(e))
 
 class DownloadWorker(QThread):
     finished_signal = pyqtSignal(bool, str, str)
@@ -299,7 +237,7 @@ class EqualizerDialog(QDialog):
             layout.addLayout(col)
 
 # -------------------------------------------------------------------------
-# PURE VISUALIZER STAGE (120Hz Spring Physics & Specular Aura)
+# PURE VISUALIZER STAGE
 # -------------------------------------------------------------------------
 class PureVisualizerStage(QWidget):
     def __init__(self, parent=None):
@@ -313,7 +251,7 @@ class PureVisualizerStage(QWidget):
 
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self.physics_tick)
-        self.anim_timer.start(8) # ~120 FPS high-smoothness tick
+        self.anim_timer.start(8)
 
     def set_spectrum(self, spectrum):
         self.spectrum_data = spectrum
@@ -344,9 +282,9 @@ class PureVisualizerStage(QWidget):
             target = self.smooth_targets[i]
             curr = self.current_heights[i]
             if target > curr:
-                self.current_heights[i] += (target - curr) * 0.32  # Crisp iOS spring attack
+                self.current_heights[i] += (target - curr) * 0.32
             else:
-                self.current_heights[i] -= (curr - target) * 0.095 # Silk decay release
+                self.current_heights[i] -= (curr - target) * 0.095
         self.update()
 
     def paintEvent(self, event):
@@ -356,7 +294,6 @@ class PureVisualizerStage(QWidget):
 
         painter.fillRect(self.rect(), QColor("#030406"))
 
-        # Dynamic Ambient Aura Glow
         avg_energy = float(np.mean(self.current_heights))
         aura_alpha = int(60 + avg_energy * 140)
         aura = QRadialGradient(w * 0.5 + math.sin(self.spatial_phase) * 90, h * 0.45, w * 0.65)
@@ -391,7 +328,7 @@ class PureVisualizerStage(QWidget):
             painter.drawRoundedRect(QRectF(x, y_up, bar_w, up_h), 4.0, 4.0)
 
 # -------------------------------------------------------------------------
-# FLUID PROGRESS BAR & CONTROLS
+# PROGRESS BAR & CONTROLS
 # -------------------------------------------------------------------------
 class Fluid120HzProgressBar(QWidget):
     position_seek = pyqtSignal(int)
@@ -546,7 +483,7 @@ class FrostedGlassFrame(QFrame):
 class OxygenMusic(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OxygenMusic")
+        self.setWindowTitle("OxygenMusic - iOS 27 Edition")
         self.resize(1260, 840)
         self.setMinimumSize(980, 660)
 
@@ -560,10 +497,10 @@ class OxygenMusic(QMainWindow):
         self.audio_worker = None
         self.search_worker = None
         self.download_worker = None
+        self.stream_worker = None
 
         self.init_ui()
         self.init_tray()
-        self.init_mpris()
         self.connect_signals()
         self.load_library_from_db()
 
@@ -577,6 +514,7 @@ class OxygenMusic(QMainWindow):
             QPushButton { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; padding: 9px 18px; font-weight: bold; }
             QPushButton:hover { background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.35); }
             QPushButton#primaryBtn { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(88,101,242,0.95), stop:1 rgba(45,55,175,0.99)); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); }
+            QPushButton#streamBtn { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(52,199,89,0.95), stop:1 rgba(38,140,65,0.99)); color: #fff; border: 1px solid rgba(255, 255, 255, 0.35); }
             QListWidget { background: rgba(10, 14, 22, 0.65); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; font-size: 10pt; }
             QListWidget::item { padding: 11px 14px; border-radius: 10px; margin-bottom: 5px; }
             QListWidget::item:selected { background: rgba(110, 140, 255, 0.32); color: #d6e2ff; border: 1px solid rgba(255, 255, 255, 0.25); }
@@ -634,7 +572,7 @@ class OxygenMusic(QMainWindow):
 
         tab_header = QHBoxLayout()
         self.tab_buttons = []
-        for idx, name in enumerate(["Visualizer Stage", "Online Search Engine"]):
+        for idx, name in enumerate(["Visualizer Stage", "Online Search & Stream"]):
             btn = QPushButton(name)
             btn.setCheckable(True)
             btn.setAutoExclusive(True)
@@ -653,9 +591,10 @@ class OxygenMusic(QMainWindow):
         search_tab = FrostedGlassFrame(radius=24.0)
         st_layout = QVBoxLayout(search_tab)
         st_layout.setContentsMargins(24, 24, 24, 24)
+        
         search_bar = QHBoxLayout()
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search online songs...")
+        self.search_input.setPlaceholderText("Search online songs to stream or download...")
         self.search_input.returnPressed.connect(self.start_online_search)
         self.btn_search = QPushButton("Search")
         self.btn_search.clicked.connect(self.start_online_search)
@@ -663,15 +602,25 @@ class OxygenMusic(QMainWindow):
         search_bar.addWidget(self.btn_search)
         st_layout.addLayout(search_bar)
 
-        self.search_status = QLabel("Search and download tracks to offline library.")
+        self.search_status = QLabel("Search online music to stream instantly or download.")
         st_layout.addWidget(self.search_status)
+        
         self.search_results_list = QListWidget()
         st_layout.addWidget(self.search_results_list, 1)
 
-        self.btn_dl_selected = QPushButton("Download Selected Track to Offline Library")
+        btn_layout = QHBoxLayout()
+        self.btn_stream_selected = QPushButton("▶ Stream Online Now")
+        self.btn_stream_selected.setObjectName("streamBtn")
+        self.btn_stream_selected.clicked.connect(self.stream_selected_search_result)
+        
+        self.btn_dl_selected = QPushButton("⬇ Download to Library")
         self.btn_dl_selected.setObjectName("primaryBtn")
         self.btn_dl_selected.clicked.connect(self.download_selected_search_result)
-        st_layout.addWidget(self.btn_dl_selected)
+        
+        btn_layout.addWidget(self.btn_stream_selected)
+        btn_layout.addWidget(self.btn_dl_selected)
+        st_layout.addLayout(btn_layout)
+
         self.stack.addWidget(search_tab)
         center_layout.addWidget(self.stack, 1)
         splitter.addWidget(center)
@@ -727,18 +676,6 @@ class OxygenMusic(QMainWindow):
         anim.start()
         self.stack.setCurrentIndex(index)
 
-    def init_mpris(self):
-        if not HAS_DBUS:
-            return
-        try:
-            bus = QDBusConnection.sessionBus()
-            bus.registerService("org.mpris.MediaPlayer2.oxygenmusic")
-            bus.registerObject("/org/mpris/MediaPlayer2", self)
-            self.mpris_root = MprisRootAdaptor(self)
-            self.mpris_player = MprisPlayerAdaptor(self)
-        except Exception:
-            pass
-
     def init_tray(self):
         self.tray = QSystemTrayIcon(self.windowIcon(), self)
         menu = QMenu()
@@ -762,6 +699,7 @@ class OxygenMusic(QMainWindow):
         self.player.mediaStatusChanged.connect(self.on_media_status_changed)
         self.slider_progress.position_seek.connect(self.player.setPosition)
         self.track_list.itemDoubleClicked.connect(lambda item: self.play_track_at_row(self.track_list.row(item)))
+        self.search_results_list.itemDoubleClicked.connect(lambda item: self.stream_selected_search_result())
 
     def on_media_status_changed(self, status):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
@@ -787,9 +725,7 @@ class OxygenMusic(QMainWindow):
                 if self.audio_worker and self.audio_worker.isRunning():
                     self.audio_worker.stop()
                     self.audio_worker.wait(50)
-                self.audio_worker = AudioAnalysisWorker(path)
-                self.audio_worker.analysis_ready.connect(self.stage.set_spectrum)
-                self.audio_worker.start()
+                # Note: real-time FFT analyzer works best on local files
 
     def toggle_playback(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -817,7 +753,7 @@ class OxygenMusic(QMainWindow):
         if not q:
             return
         self.search_results_list.clear()
-        self.search_status.setText("Searching...")
+        self.search_status.setText("Searching online...")
         self.search_worker = SearchWorker(q)
         self.search_worker.results_signal.connect(self.handle_search_results)
         self.search_worker.start()
@@ -826,11 +762,42 @@ class OxygenMusic(QMainWindow):
         if not success:
             self.search_status.setText(f"Search failed: {err}")
             return
-        self.search_status.setText(f"Found {len(results)} tracks.")
+        self.search_status.setText(f"Found {len(results)} tracks. Double-click to stream.")
         for r in results:
-            item = QListWidgetItem(f"[{r['duration']}] {r['title']}")
+            dur = r.get('duration', '--:--')
+            title = r.get('title', 'Unknown Title')
+            item = QListWidgetItem(f"[{dur}] {title}")
             item.setData(Qt.ItemDataRole.UserRole, r['url'])
+            item.setData(Qt.ItemDataRole.ToolTipRole, title)
             self.search_results_list.addItem(item)
+
+    def stream_selected_search_result(self):
+        item = self.search_results_list.currentItem()
+        if not item:
+            QMessageBox.warning(self, "Selection Error", "Please select a track to stream first!")
+            return
+        url = item.data(Qt.ItemDataRole.UserRole)
+        title = item.data(Qt.ItemDataRole.ToolTipRole) or item.text()
+        
+        self.btn_stream_selected.setEnabled(False)
+        self.btn_stream_selected.setText("Resolving Stream...")
+        self.search_status.setText(f"Extracting live stream for: {title}...")
+
+        self.stream_worker = StreamWorker(url)
+        self.stream_worker.stream_ready.connect(lambda success, stream_url, t, err: self.handle_stream_ready(success, stream_url, title, err))
+        self.stream_worker.start()
+
+    def handle_stream_ready(self, success, stream_url, title, err):
+        self.btn_stream_selected.setEnabled(True)
+        self.btn_stream_selected.setText("▶ Stream Online Now")
+        if success:
+            self.player.setSource(QUrl(stream_url))
+            self.player.play()
+            self.set_display_title(f"⚡ Streaming: {title}")
+            self.search_status.setText(f"Now streaming: {title}")
+        else:
+            QMessageBox.critical(self, "Streaming Failed", f"Could not stream track:\n{err}")
+            self.search_status.setText("Streaming failed.")
 
     def download_selected_search_result(self):
         item = self.search_results_list.currentItem()
@@ -847,7 +814,7 @@ class OxygenMusic(QMainWindow):
 
     def handle_download_finished(self, success, path_or_err, title):
         self.btn_dl_selected.setEnabled(True)
-        self.btn_dl_selected.setText("Download Selected Track to Offline Library")
+        self.btn_dl_selected.setText("⬇ Download to Library")
         if success:
             try:
                 conn = sqlite3.connect(DB_PATH)
