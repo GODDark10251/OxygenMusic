@@ -1,6 +1,6 @@
 # 🎵 OxygenMusic
 
-A high-performance, lightweight native Linux music player designed for Arch Linux and custom tiling window managers (like Hyprland and Caelestia Shell), featuring an iOS 27 "Liquid Glass" aesthetic and real-time spatial visualizers.
+A high-performance, lightweight native Linux music player designed for Arch Linux and custom tiling window managers (like Hyprland and Caelestia Shell), featuring an iOS 27 "Liquid Glass" aesthetic, real-time spatial visualizers, and online streaming.
 
 ---
 
@@ -8,9 +8,11 @@ A high-performance, lightweight native Linux music player designed for Arch Linu
 
 - **iOS 27 Liquid Glass UI:** Frosted glass aesthetics, dynamic blur boundaries, and a sleek modern layout.
 - **120Hz Spatial Visualizer:** Non-blocking multithreaded fast Fourier transform (FFT) powered by SciPy and NumPy for real-time reactive audio spectrums.
-- **Audio Equalizer & Preamp:** Adjustable 5-band frequency filters and master preamp gain controls.
+- **Online Search & Streaming:** Direct search and lightning-fast streaming/downloading of tracks directly inside the app.
+- **Dark/Light Mode Shortcut:** Instantly toggle between dark and light themes using **`Ctrl+T`**.
 - **Auto-Play & Queue Management:** Continuous track progression for both local audio libraries and downloaded streaming searches.
 - **MPRIS v2 D-Bus Integration:** Full desktop shell integration allowing global media keys (`playerctl`) to control playback seamlessly.
+- **Custom Minimalist Branding:** Programmatically styled dark and red desktop application and system tray icon.
 
 ---
 
